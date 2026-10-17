@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <link rel="icon" href="data:,">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="format-detection" content="telephone=no">
+  <title>现场签到</title>
+  <link rel="stylesheet" href="/assets/common.css">
+  <link rel="stylesheet" href="/m/m.css">
+</head>
+<body>
+  <main class="wrap">
+    <header class="hero">
+      <div class="badge">LUCKY DRAW</div>
+      <h1 id="title">年会抽奖</h1>
+      <p class="sub">扫码签到 · 参与现场抽奖</p>
+    </header>
+
+    <section id="loading" class="panel center">加载中…</section>
+
+    <section id="closed" class="panel center" hidden>
+      <div class="big">签到暂未开放</div>
+      <p class="muted">请留意现场主持人的通知</p>
+    </section>
+
+    <form id="form" class="panel" hidden novalidate>
+      <label>姓名<input class="input" id="name" maxlength="30" autocomplete="name" required></label>
+      <label>手机号<input class="input" id="phone" type="tel" inputmode="numeric" maxlength="11" autocomplete="tel" required></label>
+      <label id="deptRow">部门 <span class="muted">（选填）</span><input class="input" id="dept" maxlength="40"></label>
+      <p id="modeTip" class="muted small" hidden>本次活动仅限受邀名单，请填写报名时的姓名与手机号。</p>
+      <button class="btn primary block" id="submit" type="submit">签到</button>
+      <p class="muted small">手机号仅用于核验身份与领奖联系，大屏展示时会脱敏。</p>
+    </form>
+
+    <section id="done" class="panel center" hidden>
+      <div class="check">✓</div>
+      <div class="big" id="doneName"></div>
+      <p class="muted" id="doneMeta"></p>
+      <p class="tip">签到成功，请留意大屏抽奖</p>
+      <div id="wins"></div>
+    </section>
+  </main>
+  <script src="/assets/common.js"></script>
+  <script src="/m/m.js"></script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: radial-gradient(ellipse at 50% 30%, #a3121e 0%, #5a0a10 45%, #1a0205 100%);
+  color: #fff; user-select: none;
+}
+#fx { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+.top { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 2.2vh 3vw; z-index: 5; }
+.top h1 { margin: 0; font-size: 4.2vh; letter-spacing: .4vh; color: var(--gold-soft); text-shadow: 0 0 2vh rgba(255, 180, 0, .5); }
+.counter { font-size: 2.4vh; opacity: .9; }
+.counter b { font-size: 4vh; color: var(--gold); margin: 0 .4vw; font-variant-numeric: tabular-nums; }
+#poolInfo { margin-left: 1.2vw; font-size: 2vh; opacity: .7; }
+
+/* 3D 名字球 */
+.sphere { position: fixed; left: 50%; top: 50%; width: 0; height: 0; z-index: 1; }
+.sphere .tag {
+  position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 2.3vh; font-weight: 600;
+  padding: .4vh .8vw; border-radius: .6vh; color: #ffe9b0; background: rgba(255, 215, 122, .08);
+  border: 1px solid rgba(255, 215, 122, .25); will-change: transform, opacity; transform-origin: center;
+}
+.sphere .tag.hot { background: var(--gold); color: var(--red-deep); box-shadow: 0 0 2vh var(--gold); }
+body.mode-wall .sphere { left: 62%; }
+
+/* 签到墙 */
+.wall { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+.qr-box { position: absolute; left: 6vw; top: 50%; transform: translateY(-50%); text-align: center; pointer-events: auto; }
+.qr-box img { width: 34vh; height: 34vh; background: #fff; padding: 1.4vh; border-radius: 1.6vh; box-shadow: 0 0 6vh rgba(255, 215, 122, .35); }
+.qr-tip { margin-top: 2vh; font-size: 2.6vh; color: var(--gold-soft); letter-spacing: .3vh; }
+.feed { position: absolute; left: 6vw; bottom: 9vh; width: 34vh; height: 18vh; overflow: hidden; display: flex; flex-direction: column-reverse; gap: .8vh; }
+.feed div { font-size: 2vh; opacity: .9; animation: slideIn .4s ease-out; }
+.feed div b { color: var(--gold); }
+@keyframes slideIn { from { transform: translateX(-30px); opacity: 0; } to { transform: none; opacity: .9; } }
+
+/* 抽奖舞台 */
+.stage { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+.stage > * { pointer-events: auto; }
+.prize-bar { position: absolute; top: 11vh; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2vw; }
+.nav-btn { background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 215, 122, .4); color: var(--gold); width: 6vh; height: 6vh; border-radius: 50%; font-size: 4vh; line-height: 1; cursor: pointer; }
+.prize-card { display: flex; align-items: center; gap: 1.6vw; padding: 1.4vh 2.4vw; border-radius: 1.6vh; background: rgba(0, 0, 0, .28); border: 1px solid rgba(255, 215, 122, .35); min-width: 40vw; backdrop-filter: blur(6px); }
+.prize-card img { width: 11vh; height: 11vh; object-fit: cover; border-radius: 1vh; }
+.prize-name { font-size: 4.4vh; font-weight: 800; color: var(--gold); }
+.prize-desc { font-size: 2vh; opacity: .8; margin-top: .4vh; }
+.prize-left { font-size: 2vh; margin-top: .6vh; color: var(--gold-soft); }
+.rolling { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 13vh; font-weight: 900; color: #fff; text-shadow: 0 0 4vh #ffb300, 0 0 1vh #fff; pointer-events: none; white-space: nowrap; }
+.controls { position: absolute; bottom: 11vh; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 3vw; }
+.count-ctl { font-size: 2.2vh; display: flex; align-items: center; gap: .6vw; background: rgba(0, 0, 0, .25); padding: 1vh 1.4vw; border-radius: 99px; }
+.count-ctl input { width: 7vh; text-align: center; font-size: 2.6vh; font-weight: 700; background: transparent; border: 0; border-bottom: 2px solid var(--gold); color: #fff; outline: none; -moz-appearance: textfield; }
+.count-ctl input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.mini { background: rgba(255, 255, 255, .12); color: var(--gold); border: 1px solid rgba(255, 215, 122, .4); border-radius: 99px; width: 4vh; height: 4vh; cursor: pointer; font-size: 2.2vh; }
+.mini.wide { width: auto; padding: 0 1vw; font-size: 1.8vh; }
+.go {
+  font-size: 3.4vh; font-weight: 800; padding: 1.8vh 5vw; border-radius: 99px; border: 0; cursor: pointer; letter-spacing: .4vh;
+  background: linear-gradient(180deg, #ffe9b0, #ffb300); color: var(--red-deep); box-shadow: 0 1vh 4vh rgba(255, 179, 0, .5);
+}
+.go.stop { background: linear-gradient(180deg, #fff, #ffd77a); animation: pulse .8s infinite; }
+.go:disabled { opacity: .5; cursor: not-allowed; }
+@keyframes pulse { 50% { transform: scale(1.06); } }
+.won-list { position: absolute; bottom: 4.5vh; left: 4vw; right: 4vw; text-align: center; font-size: 1.9vh; opacity: .85; max-height: 5vh; overflow: hidden; }
+.won-list span { display: inline-block; margin: 0 .6vw; color: var(--gold-soft); }
+
+/* 结果 */
+.result { position: fixed; inset: 0; z-index: 20; background: rgba(26, 2, 5, .82); backdrop-filter: blur(8px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6vh 4vw; }
+.result-title { font-size: 5.4vh; font-weight: 900; color: var(--gold); margin-bottom: 4vh; text-shadow: 0 0 3vh rgba(255, 180, 0, .6); }
+.result-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 2vh 1.6vw; max-height: 72vh; overflow: auto; }
+.winner {
+  background: linear-gradient(160deg, #fff6dc, #ffd77a); color: var(--red-deep); border-radius: 1.6vh; text-align: center;
+  padding: 2.6vh 2vw; min-width: 18vw; box-shadow: 0 1vh 4vh rgba(0, 0, 0, .4); opacity: 0; transform: rotateY(90deg) scale(.6);
+  animation: flipIn .6s cubic-bezier(.2, .9, .3, 1.3) forwards;
+}
+.winner .n { font-size: var(--fs, 6vh); font-weight: 900; line-height: 1.15; }
+.winner .d { font-size: calc(var(--fs, 6vh) * .34); margin-top: .8vh; opacity: .75; }
+@keyframes flipIn { to { opacity: 1; transform: none; } }
+.result-tip { margin-top: 4vh; opacity: .6; font-size: 2vh; }
+
+.hint { position: fixed; bottom: 1.2vh; left: 0; right: 0; text-align: center; font-size: 1.5vh; opacity: .35; z-index: 4; }
+.hint span { margin: 0 1vw; }
+.hint .conn.off { color: #ff8a80; opacity: 1; }
+body.mode-wall .hint { opacity: .25; }

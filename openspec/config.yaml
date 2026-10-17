@@ -1,0 +1,42 @@
+schema: spec-driven
+
+context: |
+  Project: event-lottery — 年会 / 大型活动现场抽奖系统（扫码签到、签到墙、大屏抽奖、后台管理、离线兜底）。
+    功能参考旧项目 luck（Gitee/luck），存储、鉴权与抽奖逻辑已全部重写，不兼容旧 API 与旧数据格式。
+  Tech stack: Node.js >= 22.13 (ESM) + Express 5; storage via built-in node:sqlite (WAL, synchronous
+    transactions); qrcode for SVG QR codes; no build step, no other runtime dependencies
+  Auth: scrypt password hash + random session token (sha256 stored in sessions table), HttpOnly
+    SameSite=Strict cookie vl_sid; every mutating request must carry header X-VL: 1 (CSRF guard);
+    login locked for 1 minute after 5 failures; first admin "admin" created at startup
+    (ADMIN_PASSWORD env or random password printed once)
+  Realtime: Server-Sent Events at /api/admin/stream (signin / draw / revoke / prizes / participants /
+    settings / reset)
+  Layout: server.js entry; src/app.js (all routes under /api/public, /api/auth, /api/admin);
+    src/db.js (schema, settings, audit); src/draw.js (draw core: single transaction + crypto.randomInt
+    partial Fisher-Yates); src/auth.js; src/offline.js (offline HTML package); src/events.js (SSE);
+    src/util.js; public/m (mobile sign-in), public/screen (big screen), public/admin (console);
+    test/api.test.js (node:test); runtime data in data/ (lottery.db, uploads/, backups/)
+  Frontend: vanilla JS + CSS, no framework; CSP forbids inline scripts, all JS lives in separate files
+  Conventions: draw results are decided server-side in one transaction, the screen animation is
+    display-only; phone numbers are masked on the big screen and in the offline package; destructive
+    resets require typing 确认清空 and take an automatic backup first
+  Language: 中文 for docs and UI copy; technical terms stay in English
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

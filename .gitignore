@@ -1,0 +1,13 @@
+node_modules/
+data/
+.verify/
+.env
+*.log
+.openspec-backup/
+
+# Claude Code 本地配置与说明，不入库
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+**/CLAUDE.md
+**/CLAUDE.local.md

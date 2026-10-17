@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <link rel="icon" href="data:,">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>抽奖大屏</title>
+  <link rel="stylesheet" href="/assets/common.css">
+  <link rel="stylesheet" href="/screen/screen.css">
+</head>
+<body>
+  <canvas id="fx"></canvas>
+  <header class="top">
+    <h1 id="title">年会抽奖</h1>
+    <div class="counter">已签到 <b id="count">0</b> 人<span id="poolInfo"></span></div>
+  </header>
+
+  <div id="sphere" class="sphere"></div>
+
+  <!-- 签到墙 -->
+  <section id="wall" class="wall">
+    <div class="qr-box">
+      <img id="qr" alt="">
+      <div class="qr-tip">微信 / 手机相机扫码签到</div>
+    </div>
+    <div id="feed" class="feed"></div>
+  </section>
+
+  <!-- 抽奖 -->
+  <section id="stage" class="stage" hidden>
+    <div class="prize-bar">
+      <button class="nav-btn" id="prev" title="上一个奖项（←）">‹</button>
+      <div class="prize-card">
+        <img id="prizeImg" alt="" hidden>
+        <div>
+          <div class="prize-name" id="prizeName">请先在后台设置奖项</div>
+          <div class="prize-desc" id="prizeDesc"></div>
+          <div class="prize-left" id="prizeLeft"></div>
+        </div>
+      </div>
+      <button class="nav-btn" id="next" title="下一个奖项（→）">›</button>
+    </div>
+    <div id="rolling" class="rolling"></div>
+    <div class="controls">
+      <div class="count-ctl">
+        本轮抽取
+        <button class="mini" id="minus">−</button>
+        <input id="drawCount" type="number" min="1" value="1">
+        <button class="mini" id="plus">＋</button>
+        人
+        <button class="mini wide" id="all">剩余全部</button>
+      </div>
+      <button class="go" id="go">开始抽奖</button>
+    </div>
+    <div class="won-list" id="wonList"></div>
+  </section>
+
+  <!-- 结果 -->
+  <section id="result" class="result" hidden>
+    <div class="result-title" id="resultTitle"></div>
+    <div class="result-grid" id="resultGrid"></div>
+    <div class="result-tip">按空格键继续</div>
+  </section>
+
+  <footer class="hint">
+    <span>空格 开始/停止</span><span>← → 切换奖项</span><span>↑ ↓ 调整人数</span><span>Q 签到墙/抽奖</span><span>F 全屏</span>
+    <span id="conn" class="conn"></span>
+  </footer>
+
+  <script src="/assets/common.js"></script>
+  <script src="/screen/screen.js"></script>
+</body>
+</html>

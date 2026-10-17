@@ -1,0 +1,20 @@
+{
+  "name": "event-lottery",
+  "version": "1.0.0",
+  "description": "年会 / 大型活动现场抽奖系统：扫码签到、签到墙、大屏抽奖、后台管理、离线兜底",
+  "type": "module",
+  "main": "server.js",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "qrcode": "^1.5.4"
+  }
+}

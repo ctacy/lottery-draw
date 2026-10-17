@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <link rel="icon" href="data:,">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>管理员登录</title>
+  <link rel="stylesheet" href="/assets/common.css">
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body class="login-page">
+  <form id="login" class="login-card">
+    <h1>抽奖系统 · 后台</h1>
+    <label>用户名<input class="input" id="username" autocomplete="username" value="admin" required></label>
+    <label>密码<input class="input" id="password" type="password" autocomplete="current-password" required autofocus></label>
+    <button class="btn primary" style="width:100%;padding:11px" type="submit">登录</button>
+    <p class="muted small">首次启动的初始密码会打印在服务端控制台。</p>
+  </form>
+  <script src="/assets/common.js"></script>
+  <script src="/admin/login.js"></script>
+</body>
+</html>

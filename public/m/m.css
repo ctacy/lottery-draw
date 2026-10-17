@@ -1,0 +1,23 @@
+body {
+  min-height: 100vh;
+  background: radial-gradient(ellipse at top, #c81e2b 0%, #7a1020 45%, #2a0408 100%) fixed;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+.wrap { max-width: 460px; margin: 0 auto; padding: 24px 18px 40px; }
+.hero { text-align: center; color: #fff; padding: 28px 0 22px; }
+.badge { display: inline-block; letter-spacing: 4px; font-size: 12px; color: var(--gold); border: 1px solid rgba(255, 215, 122, .6); padding: 3px 12px; border-radius: 99px; }
+.hero h1 { margin: 14px 0 6px; font-size: 32px; color: var(--gold-soft); letter-spacing: 2px; text-shadow: 0 2px 18px rgba(255, 180, 0, .45); }
+.sub { margin: 0; opacity: .8; font-size: 14px; }
+.panel { background: #fff; border-radius: 16px; padding: 22px 20px; box-shadow: 0 12px 40px rgba(0, 0, 0, .3); }
+.panel label { display: block; margin-bottom: 14px; font-size: 14px; color: #4e5969; }
+.panel label .input { margin-top: 6px; font-size: 16px; padding: 12px; }
+.block { width: 100%; padding: 13px; font-size: 17px; margin-top: 6px; }
+.center { text-align: center; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; margin: 10px 0 0; }
+.big { font-size: 24px; font-weight: 700; margin: 6px 0; }
+.check { width: 64px; height: 64px; line-height: 64px; margin: 4px auto 10px; border-radius: 50%; background: var(--ok); color: #fff; font-size: 34px; }
+.tip { margin: 16px 0 0; padding: 10px; background: #fff7e6; color: #ad6800; border-radius: 8px; font-size: 14px; }
+.win { margin-top: 14px; padding: 16px; border-radius: 12px; background: linear-gradient(135deg, #ffe9b0, #ffc94d); color: var(--red-deep); }
+.win b { display: block; font-size: 20px; margin-bottom: 4px; }
+.win img { max-width: 100%; max-height: 140px; border-radius: 8px; margin-top: 8px; }
