@@ -1,5 +1,7 @@
 # 年会现场抽奖系统
 
+[![CI](https://github.com/ctacy/lottery-draw/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ctacy/lottery-draw/actions/workflows/ci.yml)
+
 面向公司年会、大型活动的现场抽奖：扫码签到 → 签到墙 → 大屏抽奖 → 中奖名单导出，附带离线兜底。
 功能参考自 `luck` 项目，重写了存储、鉴权与抽奖逻辑。
 
