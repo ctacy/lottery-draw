@@ -1,8 +1,9 @@
 name: CI
 
 on:
+  # push 只在 main 触发；其他分支经 PR 触发，避免同一提交跑两遍
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
