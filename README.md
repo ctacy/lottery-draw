@@ -64,24 +64,22 @@ data/                运行数据（库文件、上传图片、备份），已 g
 - **备份**：数据只有 `data/lottery.db` 一个文件；重置操作会自动在 `data/backups/` 生成快照。
 - **单实例**：SQLite、登录限流、SSE 广播都在进程内，不要用 cluster 或多实例负载均衡。
 
-## Jenkins 部署
+## Jenkins 部署（Docker，与 Jenkins 同机）
 
-流水线（`Jenkinsfile`）：`npm ci` → `npm test` → `git archive` 打包 → SSH 传到 `/opt/lottery/releases/<构建号>-<commit>/` → 执行 `deploy/deploy.sh`（装依赖、切换 `current` 软链、重启、健康检查，失败自动回滚到上一版，保留最近 5 版）。
+Freestyle 任务，Execute shell 只需一行：`bash deploy/jenkins-docker.sh`。脚本流程：容器内 `npm test` → 备份数据库（`VACUUM INTO` 到 `data/backups/predeploy-*.db`）→ 构建镜像（旧镜像标为 `lottery:rollback`）→ `compose up` → 等待健康检查，失败自动回滚。
 
-**Jenkins 侧**：agent 为 Linux，PATH 中有 Node ≥ 22.13；安装 SSH Agent 插件；添加 SSH 私钥凭据，ID 为 `lottery-deploy-ssh`；构建时填写参数 `DEPLOY_HOST`（如 `deploy@10.0.0.5`），留空则只跑测试。
+- **前提**：Jenkins 所在机器有 Docker 与 compose（`docker compose` 或 `docker-compose`），Jenkins 用户可执行 `docker`。
+- **数据**：存放在外部卷 `lottery-data`（`docker compose down -v` 不会删除）。手动备份：`docker cp lottery:/app/data/backups ./`，或后台下载备份。
+- **机密**：新建 Secret file 凭据（如 `lottery-env-file`），内容示例见下；任务里勾选「Use secret text(s) or file(s)」，变量名 `LOTTERY_ENV`。
+- **国内网络**：可在任务里设置 `NPM_REGISTRY=https://registry.npmmirror.com`。
 
-**服务器侧**（一次性，Ubuntu 为例）：
-
-```bash
-sudo useradd -r -s /usr/sbin/nologin lottery          # 运行服务，只能写数据目录
-sudo useradd -m -s /bin/bash deploy                   # Jenkins 登录用，放入其公钥
-sudo mkdir -p /opt/lottery/releases /opt/lottery/data
-sudo chown deploy: /opt/lottery /opt/lottery/releases
-sudo chown lottery: /opt/lottery/data
-sudo cp .env.example /opt/lottery/lottery.env         # 改为 DATA_DIR=/opt/lottery/data、HOST=127.0.0.1 等
-sudo chown root:lottery /opt/lottery/lottery.env && sudo chmod 640 /opt/lottery/lottery.env
-sudo cp deploy/lottery.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable lottery
-echo 'deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart lottery' | sudo tee /etc/sudoers.d/lottery-deploy
+```ini
+# 仅首次建库生效；不设则随机生成，见 docker logs lottery（行尾不要写注释）
+ADMIN_PASSWORD=强密码
+# 前面有 HTTPS 反向代理时：
+# LOTTERY_PUBLISH=127.0.0.1:8201
+# COOKIE_SECURE=1
+# TRUST_PROXY=1
 ```
 
-首次部署前在 `lottery.env` 里设置 `ADMIN_PASSWORD`；公网访问再按上文配好 HTTPS 反向代理与 `COOKIE_SECURE=1`、`TRUST_PROXY=1`。
+容器内打印的「扫码签到」地址是容器 IP，需在后台设置里填写「二维码访问地址」。

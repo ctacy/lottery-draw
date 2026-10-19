@@ -1,0 +1,21 @@
+# 由 deploy/jenkins-docker.sh 以项目名 lottery 启动；变量来自同目录 .env（Jenkins 凭据写入，不入库）
+services:
+  lottery:
+    build: .
+    image: lottery:latest
+    container_name: lottery
+    restart: unless-stopped
+    ports:
+      # 前面有 Nginx 时改为 127.0.0.1:8201
+      - "${LOTTERY_PUBLISH:-8201}:8201"
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+    volumes:
+      - lottery-data:/app/data
+
+volumes:
+  # 外部卷：docker compose down -v 也不会删除抽奖数据
+  lottery-data:
+    external: true
