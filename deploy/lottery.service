@@ -1,0 +1,23 @@
+# /etc/systemd/system/lottery.service
+[Unit]
+Description=Event Lottery
+After=network.target
+
+[Service]
+User=lottery
+Group=lottery
+WorkingDirectory=/opt/lottery/current
+EnvironmentFile=/opt/lottery/lottery.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=2
+
+# 加固：除数据目录外全部只读（DATA_DIR 必须是 /opt/lottery/data）
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/lottery/data
+
+[Install]
+WantedBy=multi-user.target

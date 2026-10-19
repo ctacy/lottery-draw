@@ -62,3 +62,26 @@ data/                运行数据（库文件、上传图片、备份），已 g
 - **网络**：手机须能访问服务器。会场 Wi-Fi 常有 AP 隔离，需提前用手机实测；必要时部署到公网服务器，并在设置里填写「二维码访问地址」。
 - **公网部署**：放在 HTTPS 反向代理之后，设置 `COOKIE_SECURE=1`、`TRUST_PROXY=1`。
 - **备份**：数据只有 `data/lottery.db` 一个文件；重置操作会自动在 `data/backups/` 生成快照。
+- **单实例**：SQLite、登录限流、SSE 广播都在进程内，不要用 cluster 或多实例负载均衡。
+
+## Jenkins 部署
+
+流水线（`Jenkinsfile`）：`npm ci` → `npm test` → `git archive` 打包 → SSH 传到 `/opt/lottery/releases/<构建号>-<commit>/` → 执行 `deploy/deploy.sh`（装依赖、切换 `current` 软链、重启、健康检查，失败自动回滚到上一版，保留最近 5 版）。
+
+**Jenkins 侧**：agent 为 Linux，PATH 中有 Node ≥ 22.13；安装 SSH Agent 插件；添加 SSH 私钥凭据，ID 为 `lottery-deploy-ssh`；构建时填写参数 `DEPLOY_HOST`（如 `deploy@10.0.0.5`），留空则只跑测试。
+
+**服务器侧**（一次性，Ubuntu 为例）：
+
+```bash
+sudo useradd -r -s /usr/sbin/nologin lottery          # 运行服务，只能写数据目录
+sudo useradd -m -s /bin/bash deploy                   # Jenkins 登录用，放入其公钥
+sudo mkdir -p /opt/lottery/releases /opt/lottery/data
+sudo chown deploy: /opt/lottery /opt/lottery/releases
+sudo chown lottery: /opt/lottery/data
+sudo cp .env.example /opt/lottery/lottery.env         # 改为 DATA_DIR=/opt/lottery/data、HOST=127.0.0.1 等
+sudo chown root:lottery /opt/lottery/lottery.env && sudo chmod 640 /opt/lottery/lottery.env
+sudo cp deploy/lottery.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable lottery
+echo 'deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart lottery' | sudo tee /etc/sudoers.d/lottery-deploy
+```
+
+首次部署前在 `lottery.env` 里设置 `ADMIN_PASSWORD`；公网访问再按上文配好 HTTPS 反向代理与 `COOKIE_SECURE=1`、`TRUST_PROXY=1`。
