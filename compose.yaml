@@ -6,8 +6,8 @@ services:
     container_name: lottery
     restart: unless-stopped
     ports:
-      # 前面有 Nginx 时改为 127.0.0.1:8201
-      - "${LOTTERY_PUBLISH:-8201}:8201"
+      # 宿主机端口；前面有 Nginx 时改为 127.0.0.1:3009
+      - "${LOTTERY_PUBLISH:-3009}:8201"
     environment:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-0}

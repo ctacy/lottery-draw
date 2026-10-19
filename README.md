@@ -77,7 +77,7 @@ Freestyle 任务，Execute shell 只需一行：`bash deploy/jenkins-docker.sh`�
 # 仅首次建库生效；不设则随机生成，见 docker logs lottery（行尾不要写注释）
 ADMIN_PASSWORD=强密码
 # 前面有 HTTPS 反向代理时：
-# LOTTERY_PUBLISH=127.0.0.1:8201
+# LOTTERY_PUBLISH=127.0.0.1:3009
 # COOKIE_SECURE=1
 # TRUST_PROXY=1
 ```
