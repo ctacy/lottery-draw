@@ -1,3 +1,5 @@
+/* 类选择器上的 display 会盖过 [hidden] 的默认样式，统一兜底 */
+[hidden] { display: none !important; }
 :root {
   --red: #b3141f;
   --red-deep: #5a0a10;

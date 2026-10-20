@@ -61,6 +61,12 @@ function addressRank(ip) {
   return 5;
 }
 
+/** 回环主机名（localhost、127.x、::1），手机无法通过它访问本机。 */
+export function isLoopbackHost(hostname) {
+  const h = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || /^127\./.test(h);
+}
+
 export function lanAddresses() {
   const list = [];
   for (const [ifname, addrs] of Object.entries(os.networkInterfaces())) {
