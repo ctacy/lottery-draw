@@ -114,10 +114,11 @@
         <select class="input" id="wprize" style="max-width:200px"><option value="">全部奖项</option></select>
         <select class="input" id="wstatus" style="max-width:120px"><option value="valid">有效</option><option value="revoked">已作废</option><option value="all">全部</option></select>
         <input class="input" id="wq" placeholder="搜索姓名 / 手机 / 部门" style="max-width:220px">
+        <button class="btn sm danger mut" id="batchRevoke" disabled>批量作废</button>
         <span class="spacer"></span>
         <a class="btn sm" id="winnersCsv">导出中奖名单 CSV</a>
       </div>
-      <table class="table"><thead><tr><th>记录号</th><th>轮次</th><th>奖项</th><th>姓名</th><th>手机号</th><th>部门</th><th>时间</th><th>状态</th><th></th></tr></thead><tbody id="winnerRows"></tbody></table>
+      <table class="table"><thead><tr><th class="pick"><input type="checkbox" class="mut" id="wAll" title="全选当前列表中的有效记录"></th><th>记录号</th><th>轮次</th><th>奖项</th><th>姓名</th><th>手机号</th><th>部门</th><th>时间</th><th>状态</th><th></th></tr></thead><tbody id="winnerRows"></tbody></table>
       <h3 style="margin-top:28px">抽奖轮次</h3>
       <p class="muted small">每轮记录请求人数、实际抽中人数与当时奖池人数，便于事后核对。</p>
       <table class="table"><thead><tr><th>轮次</th><th>奖项</th><th>请求</th><th>抽中</th><th>奖池人数</th><th>操作人</th><th>时间</th></tr></thead><tbody id="drawRows"></tbody></table>

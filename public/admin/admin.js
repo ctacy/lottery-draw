@@ -1,6 +1,6 @@
 (function () {
   const { api, esc, $, $$, toast, subscribe } = VL;
-  const state = { tab: 'overview', events: [], eventId: null, prizes: [], pPage: 1 };
+  const state = { tab: 'overview', events: [], eventId: null, prizes: [], pPage: 1, wSel: new Set() };
   const LAST_EVENT_KEY = 'vl-admin-event';
   // 须在任何 replaceState 之前读取，否则刷新页面会丢失当前页签
   const initialTab = location.hash.slice(1);
@@ -433,21 +433,63 @@
     if (!sel.value) q.delete('prizeId');
     const [rows, draws] = await Promise.all([api('GET', EP() + '/winners?' + q), api('GET', EP() + '/draws')]);
     state.wRows = rows;
+    // 列表刷新后只保留仍在列表中且有效的勾选
+    const validIds = new Set(rows.filter((w) => w.status === 'valid').map((w) => w.id));
+    state.wSel = new Set([...state.wSel].filter((id) => validIds.has(id)));
     $('#winnerRows').innerHTML =
       rows
         .map(
           (w) => `<tr>
+        <td class="pick">${w.status === 'valid' ? `<input type="checkbox" class="wpick mut" data-id="${w.id}" ${state.wSel.has(w.id) ? 'checked' : ''}>` : ''}</td>
         <td>${w.id}</td><td>${w.draw_id}</td><td>${esc(w.prize_name)}</td><td>${esc(w.name)}</td><td>${esc(w.phone)}</td><td>${esc(w.dept)}</td>
         <td class="small">${esc(w.created_at)}</td>
         <td>${w.status === 'valid' ? '<span class="tag ok">有效</span>' : `<span class="tag err" title="${esc(w.revoked_at)}">作废：${esc(w.revoke_reason)}</span>`}</td>
         <td class="ops">${w.status === 'valid' ? `<button class="btn sm danger mut" data-id="${w.id}">作废</button>` : ''}</td></tr>`
         )
-        .join('') || '<tr><td colspan="9" class="muted">暂无记录</td></tr>';
+        .join('') || '<tr><td colspan="10" class="muted">暂无记录</td></tr>';
+    syncBatch();
     $('#drawRows').innerHTML =
       draws
         .map((d) => `<tr><td>${d.id}</td><td>${esc(d.prize_name)}</td><td>${d.requested}</td><td>${d.drawn}</td><td>${d.pool_size}</td><td>${esc(d.operator)}</td><td class="small">${esc(d.created_at)}</td></tr>`)
         .join('') || '<tr><td colspan="7" class="muted">暂无</td></tr>';
   }
+  function syncBatch() {
+    const n = state.wSel.size;
+    const valid = state.wRows.filter((w) => w.status === 'valid').length;
+    $('#batchRevoke').disabled = n === 0;
+    $('#batchRevoke').textContent = n ? `批量作废（${n}）` : '批量作废';
+    $('#wAll').checked = valid > 0 && n === valid;
+    $('#wAll').indeterminate = n > 0 && n < valid;
+  }
+  $('#winnerRows').addEventListener('change', (e) => {
+    if (!e.target.classList.contains('wpick')) return;
+    const id = Number(e.target.dataset.id);
+    if (e.target.checked) state.wSel.add(id);
+    else state.wSel.delete(id);
+    syncBatch();
+  });
+  $('#wAll').addEventListener('change', (e) => {
+    state.wSel = new Set(e.target.checked ? state.wRows.filter((w) => w.status === 'valid').map((w) => w.id) : []);
+    $$('#winnerRows .wpick').forEach((c) => (c.checked = e.target.checked));
+    syncBatch();
+  });
+  $('#batchRevoke').addEventListener('click', async () => {
+    const picked = state.wRows.filter((w) => state.wSel.has(w.id));
+    const names = picked.slice(0, 8).map((w) => w.name).join('、') + (picked.length > 8 ? ` 等 ${picked.length} 人` : '');
+    const v = await dialog(`批量作废 ${picked.length} 条中奖记录`, [
+      { type: 'html', html: `<p class="muted small">${esc(names)}</p><p class="muted small">作废后名额退回对应奖项，可在大屏重新抽取。记录保留，可追溯。</p>` },
+      { name: 'reason', label: '原因（统一填写）', value: '未到场', attrs: 'maxlength="100"' },
+      { name: 'disqualify', label: '同时取消这些人后续抽奖资格', type: 'checkbox', value: true },
+    ], `确认作废 ${picked.length} 条`);
+    if (!v) return;
+    const r = await guard(() => api('POST', EP() + '/winners/batch-revoke', { ids: picked.map((w) => w.id), ...v }));
+    if (!r) return;
+    state.wSel.clear();
+    const head = `已作废 ${r.revoked} 条，名额已退回`;
+    if (r.skipped.length) alert(head + `\n\n跳过 ${r.skipped.length} 条：\n` + r.skipped.slice(0, 20).map((s) => `记录 ${s.id}：${s.reason}`).join('\n'));
+    else toast(head, 'ok');
+    guard(loadWinners);
+  });
   ['#wprize', '#wstatus'].forEach((s) => $(s).addEventListener('change', () => guard(loadWinners)));
   $('#wq').addEventListener('input', () => {
     clearTimeout(wTimer);

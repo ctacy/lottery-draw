@@ -426,6 +426,47 @@ test('删除活动：仅限无抽奖记录，删除前自动备份；新建时�
   await adm('POST', `/api/admin/events/${copy.id}/archive`);
 });
 
+test('批量作废：单事务、名额退回、可取消资格；已作废与他活动记录跳过；归档后拒绝', async () => {
+  const adm = await adminClient();
+  const ev = (await adm('POST', '/api/admin/events', { title: '批量作废' })).data;
+  const other = (await adm('POST', '/api/admin/events', { title: '他活动' })).data;
+  const EX = `/api/admin/events/${ev.id}`;
+  const EO = `/api/admin/events/${other.id}`;
+  const csv = (pre) => Array.from({ length: 10 }, (_, i) => `${pre}${i},1660000${String(i).padStart(4, '0')}`).join('\n');
+  await adm('POST', EX + '/participants/import', { csv: csv('批'), checkedIn: true });
+  await adm('POST', EO + '/participants/import', { csv: csv('他'), checkedIn: true });
+  const prize = (await adm('POST', EX + '/prizes', { name: '批量奖', quantity: 6 })).data;
+  const prizeO = (await adm('POST', EO + '/prizes', { name: '他奖', quantity: 1 })).data;
+  const ws = (await adm('POST', EX + '/draw', { prizeId: prize.id, count: 6 })).data.winners;
+  const wo = (await adm('POST', EO + '/draw', { prizeId: prizeO.id })).data.winners[0];
+
+  assert.equal((await adm('POST', EX + '/winners/batch-revoke', { ids: [] })).status, 400);
+  assert.equal((await adm('POST', EX + '/winners/batch-revoke', { ids: ['x'] })).status, 400);
+  assert.equal((await adm('POST', EX + '/winners/batch-revoke', { ids: Array.from({ length: 501 }, (_, i) => i + 1) })).status, 400);
+
+  // 先单条作废一条，再批量：已作废的、他活动的、不存在的都跳过；重复编号去重
+  await adm('POST', `${EX}/winners/${ws[0].winnerId}/revoke`, {});
+  const ids = [ws[0].winnerId, ws[1].winnerId, ws[2].winnerId, ws[3].winnerId, ws[3].winnerId, wo.winnerId, 999999];
+  const r = await adm('POST', EX + '/winners/batch-revoke', { ids, reason: '集体缺席', disqualify: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.revoked, 3);
+  assert.deepEqual(r.data.skipped.map((s) => s.reason).sort(), ['已作废', '记录不存在', '记录不存在']);
+
+  const rows = (await adm('GET', EX + '/winners?status=revoked')).data;
+  assert.equal(rows.length, 4);
+  assert.ok(rows.filter((w) => w.revoke_reason === '集体缺席').length === 3);
+  assert.equal((await adm('GET', EX + '/prizes')).data[0].remaining, 4, '名额全部退回');
+  const dq = ctx.db.prepare('SELECT COUNT(*) AS n FROM participants WHERE event_id = ? AND eligible = 0').get(ev.id).n;
+  assert.equal(dq, 3, '同时取消了 3 人的资格');
+  assert.equal((await adm('GET', EO + '/winners')).data.length, 1, '他活动的中奖记录不受影响');
+  const log = (await adm('GET', `/api/admin/audit?eventId=${ev.id}`)).data.find((l) => l.action === 'winner.revoke.batch');
+  assert.equal(JSON.parse(log.detail).ids.length, 3, '整批只记一条审计日志');
+
+  await adm('POST', EX + '/archive');
+  assert.equal((await adm('POST', EX + '/winners/batch-revoke', { ids: [ws[4].winnerId] })).status, 409);
+  await adm('POST', EO + '/archive');
+});
+
 // 多活动改造前（schema v0）的建表语句，用于验证迁移
 const LEGACY_SCHEMA = `
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
