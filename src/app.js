@@ -734,6 +734,46 @@ export function createApp(options = {}) {
     res.json({ ok: true });
   });
 
+  // 批量作废：单事务；不属于本活动或已作废的记录跳过并逐条说明，其余全部作废
+  evr.post('/winners/batch-revoke', (req, res) => {
+    const ev = req.event;
+    const raw = req.body?.ids;
+    if (!Array.isArray(raw) || raw.length === 0) throw new HttpError(400, '请选择要作废的中奖记录');
+    if (raw.length > 500) throw new HttpError(400, '单次最多作废 500 条');
+    const ids = [...new Set(raw.map((v) => toInt(v, { min: 1, name: '中奖记录' })))];
+    const reason = cleanText(req.body?.reason, 100) || '未到场';
+    const disqualify = Boolean(req.body?.disqualify);
+    const result = tx(db, () => {
+      const find = db.prepare('SELECT * FROM winners WHERE id = ? AND event_id = ?');
+      const revoke = db.prepare("UPDATE winners SET status='revoked', revoke_reason=?, revoked_at=datetime('now','localtime') WHERE id=?");
+      const dq = db.prepare('UPDATE participants SET eligible = 0 WHERE id = ?');
+      const done = [];
+      const skipped = [];
+      for (const id of ids) {
+        const w = find.get(id, ev.id);
+        if (!w) skipped.push({ id, reason: '记录不存在' });
+        else if (w.status !== 'valid') skipped.push({ id, reason: '已作废' });
+        else {
+          revoke.run(reason, id);
+          if (disqualify) dq.run(w.participant_id);
+          done.push(w);
+        }
+      }
+      return { done, skipped };
+    });
+    if (result.done.length) {
+      audit(
+        db,
+        req.admin.username,
+        'winner.revoke.batch',
+        { ids: result.done.map((w) => w.id), participantIds: result.done.map((w) => w.participant_id), reason, disqualify, skipped: result.skipped.length },
+        ev.id
+      );
+      hub.publish('revoke', { eventId: ev.id, ids: result.done.map((w) => w.id), prizeIds: [...new Set(result.done.map((w) => w.prize_id))] });
+    }
+    res.json({ revoked: result.done.length, skipped: result.skipped });
+  });
+
   evr.get('/winners.csv', (req, res) => {
     const ev = req.event;
     const rows = db

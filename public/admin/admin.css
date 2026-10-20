@@ -39,6 +39,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
 .table th { background: #fafbfc; color: #4e5969; font-weight: 600; text-align: left; }
 .table th, .table td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .table.compact td, .table.compact th { padding: 6px 10px; font-size: 13px; }
+.table th.pick, .table td.pick { width: 32px; padding-right: 0; }
 .table td.ops { text-align: right; white-space: nowrap; }
 .table img.thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; background: var(--bg); }
 .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--bg); color: #4e5969; }
