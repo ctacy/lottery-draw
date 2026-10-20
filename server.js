@@ -16,6 +16,9 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`  后台管理  http://localhost:${PORT}/admin/`);
   console.log(`  抽奖大屏  http://localhost:${PORT}/screen/`);
   for (const { address } of lanAddresses()) console.log(`  扫码签到  http://${address}:${PORT}/m/`);
+  if (db.migratedFrom !== undefined) {
+    console.log(`\n  已将旧版数据迁移为「默认活动」，迁移前快照：${db.migrationBackup || '（未生成）'}`);
+  }
   if (initialPassword) {
     console.log('\n  首次启动已创建管理员：admin');
     console.log(`  初始密码：${initialPassword}`);

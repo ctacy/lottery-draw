@@ -1,6 +1,13 @@
 (function () {
   const { api, esc, $, $$, toast, subscribe } = VL;
-  const state = { tab: 'overview', prizes: [], pPage: 1 };
+  const state = { tab: 'overview', events: [], eventId: null, prizes: [], pPage: 1 };
+  const LAST_EVENT_KEY = 'vl-admin-event';
+  // 须在任何 replaceState 之前读取，否则刷新页面会丢失当前页签
+  const initialTab = location.hash.slice(1);
+
+  /** 当前活动的接口前缀 */
+  const EP = () => `/api/admin/events/${state.eventId}`;
+  const currentEvent = () => state.events.find((e) => e.id === state.eventId);
 
   // ---------- 通用对话框 ----------
   /** fields: [{ name, label, type, value, options, attrs }]；返回表单值或 null（取消）。 */
@@ -56,19 +63,158 @@
     }
   }
 
+  // ---------- 活动上下文 ----------
+  async function loadEvents() {
+    state.events = await api('GET', '/api/admin/events');
+    const sel = $('#eventSel');
+    sel.innerHTML = state.events
+      .map((e) => `<option value="${e.id}">${esc(e.title)}${e.status === 'archived' ? '（已归档）' : ''}</option>`)
+      .join('');
+    // 优先级：地址栏 ?event= > 上次使用 > 第一个进行中的活动 > 第一个活动
+    const wanted = [
+      state.eventId,
+      Number(new URLSearchParams(location.search).get('event')),
+      Number(localStorage.getItem(LAST_EVENT_KEY)),
+      state.events.find((e) => e.status === 'active')?.id,
+      state.events[0]?.id,
+    ].find((id) => id && state.events.some((e) => e.id === id));
+    state.eventId = wanted ?? null;
+    sel.value = state.eventId ?? '';
+    applyEventState();
+  }
+
+  /** 按当前活动更新页面：只读状态、各类链接。 */
+  function applyEventState() {
+    const ev = currentEvent();
+    const archived = ev?.status === 'archived';
+    $('#archivedBar').hidden = !archived;
+    document.body.classList.toggle('readonly', archived);
+    if (!ev) return;
+    localStorage.setItem(LAST_EVENT_KEY, ev.id);
+    const url = new URL(location.href);
+    url.searchParams.set('event', ev.id);
+    history.replaceState(null, '', url.pathname + url.search + '#' + state.tab);
+    $('#screenLink').href = `/screen/?event=${ev.id}`;
+    $('#participantsCsv').href = EP() + '/participants.csv';
+    $('#winnersCsv').href = EP() + '/winners.csv';
+    $('#offlineLink').href = EP() + '/offline.html';
+  }
+
+  async function selectEvent(id) {
+    state.eventId = id;
+    state.prizes = [];
+    state.pPage = 1;
+    $('#eventSel').value = id;
+    applyEventState();
+    loaders[state.tab]?.();
+  }
+  $('#eventSel').addEventListener('change', (e) => selectEvent(Number(e.target.value)));
+
+  $('#reopenBtn').addEventListener('click', () =>
+    guard(async () => {
+      await api('POST', EP() + '/reopen');
+      await loadEvents();
+      loaders[state.tab]?.();
+    }, '活动已重新开启')
+  );
+
   // ---------- 导航 ----------
   function go(tab) {
     state.tab = tab;
     $$('#nav a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
     $$('[data-panel]').forEach((s) => (s.hidden = s.dataset.panel !== tab));
-    history.replaceState(null, '', '#' + tab);
+    history.replaceState(null, '', location.pathname + location.search + '#' + tab);
     loaders[tab]?.();
   }
   $('#nav').addEventListener('click', (e) => e.target.dataset.tab && go(e.target.dataset.tab));
+  window.addEventListener('hashchange', () => {
+    const tab = location.hash.slice(1);
+    if (loaders[tab] && tab !== state.tab) go(tab);
+  });
+
+  // ---------- 活动管理 ----------
+  async function loadEventsTab() {
+    await loadEvents();
+    $('#eventRows').innerHTML =
+      state.events
+        .map(
+          (e) => `<tr>
+        <td><b>${esc(e.title)}</b>${e.id === state.eventId ? ' <span class="tag ok">当前</span>' : ''}</td>
+        <td><code>${esc(e.code)}</code></td>
+        <td>${e.status === 'active' ? '<span class="tag ok">进行中</span>' : `<span class="tag" title="${esc(e.archivedAt)}">已归档</span>`}</td>
+        <td>${e.checkedIn} / ${e.participants}</td>
+        <td>${e.winners}</td>
+        <td class="small muted">${esc(e.createdAt)}</td>
+        <td class="ops">
+          ${e.id === state.eventId ? '' : `<button class="btn sm" data-act="use" data-id="${e.id}">切换到此活动</button>`}
+          <a class="btn sm" href="/screen/?event=${e.id}" target="_blank">大屏</a>
+          ${e.status === 'active'
+            ? `<button class="btn sm" data-act="archive" data-id="${e.id}">归档</button>`
+            : `<button class="btn sm" data-act="reopen" data-id="${e.id}">重新开启</button>`}
+          ${e.draws ? '' : `<button class="btn sm danger" data-act="del" data-id="${e.id}">删除</button>`}
+        </td></tr>`
+        )
+        .join('') || '<tr><td colspan="7" class="muted">还没有活动</td></tr>';
+  }
+
+  $('#addEvent').addEventListener('click', async () => {
+    const v = await dialog(
+      '新建活动',
+      [
+        { name: 'title', label: '活动名称', value: '', attrs: 'required maxlength="60" placeholder="如：2026 年会"' },
+        {
+          name: 'signinMode',
+          label: '签到模式',
+          type: 'select',
+          value: 'open',
+          options: [['open', '开放签到：扫码填写即可登记'], ['whitelist', '名单签到：仅限预导入名单']],
+        },
+        {
+          name: 'copyPrizesFrom',
+          label: '奖项',
+          type: 'select',
+          value: '',
+          options: [['', '不复制，稍后自行设置'], ...state.events.map((e) => [e.id, `复制「${e.title}」的奖项`])],
+        },
+        { name: 'allowRepeatWin', label: '允许同一人多次中奖（不同奖项）', type: 'checkbox' },
+      ],
+      '创建'
+    );
+    if (!v) return;
+    const ev = await guard(() => api('POST', '/api/admin/events', { ...v, copyPrizesFrom: v.copyPrizesFrom || undefined }), '活动已创建');
+    if (!ev) return;
+    await loadEvents();
+    selectEvent(ev.id);
+  });
+
+  $('#eventRows').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const ev = state.events.find((x) => x.id === Number(btn.dataset.id));
+    const base = `/api/admin/events/${ev.id}`;
+    if (btn.dataset.act === 'use') {
+      await selectEvent(ev.id);
+      loadEventsTab();
+    } else if (btn.dataset.act === 'archive') {
+      if (!confirm(`归档「${ev.title}」？\n归档后只读：不能签到、抽奖或修改，可随时重新开启。`)) return;
+      await guard(() => api('POST', base + '/archive'), '已归档');
+      loadEventsTab();
+    } else if (btn.dataset.act === 'reopen') {
+      await guard(() => api('POST', base + '/reopen'), '已重新开启');
+      loadEventsTab();
+    } else if (btn.dataset.act === 'del') {
+      const typed = prompt(`删除「${ev.title}」及其名单与奖项（删除前自动备份）。\n\n请输入活动名称确认：`);
+      if (typed === null) return;
+      if (typed.trim() !== ev.title) return toast('名称不一致，已取消', 'error');
+      const r = await guard(() => api('DELETE', base), '已删除');
+      if (r && ev.id === state.eventId) state.eventId = null;
+      loadEventsTab();
+    }
+  });
 
   // ---------- 概览 ----------
   async function loadOverview() {
-    const o = await api('GET', '/api/admin/overview');
+    const o = await api('GET', EP() + '/overview');
     $('#me').textContent = o.admin.username;
     const s = o.stats;
     const items = [
@@ -87,36 +233,43 @@
       $('#qr').src = qr;
       $('#qr').dataset.src = qr;
       $('#downloadQr').href = qr;
+      $('#downloadQr').download = `signin-${o.event.code}.svg`;
     }
     $('#lan').innerHTML = o.lan.map((l) => `<li>${esc(l.ifname)}: ${esc(l.address)}</li>`).join('') || '<li>未检测到</li>';
     const f = $('#settings');
     if (!f.contains(document.activeElement)) {
-      for (const [k, v] of Object.entries(o.settings)) {
-        const el = f.elements[k];
-        if (!el) continue;
-        if (el.type === 'checkbox') el.checked = v;
-        else el.value = v;
-      }
+      const ev = o.event;
+      f.eventTitle.value = ev.title;
+      f.signinMode.value = ev.signinMode;
+      f.signinOpen.checked = ev.signinOpen;
+      f.collectDept.checked = ev.collectDept;
+      f.allowRepeatWin.checked = ev.allowRepeatWin;
     }
+    const g = $('#globalSettings');
+    if (!g.contains(document.activeElement)) g.publicBaseUrl.value = o.settings.publicBaseUrl;
   }
 
   $('#settings').addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target;
     const body = {
-      eventTitle: f.eventTitle.value,
+      title: f.eventTitle.value,
       signinMode: f.signinMode.value,
-      publicBaseUrl: f.publicBaseUrl.value,
       signinOpen: f.signinOpen.checked,
       collectDept: f.collectDept.checked,
       allowRepeatWin: f.allowRepeatWin.checked,
     };
-    guard(() => api('PUT', '/api/admin/settings', body).then(loadOverview), '设置已保存');
+    guard(() => api('PUT', EP(), body).then(loadEvents).then(loadOverview), '设置已保存');
+  });
+
+  $('#globalSettings').addEventListener('submit', (e) => {
+    e.preventDefault();
+    guard(() => api('PUT', '/api/admin/settings', { publicBaseUrl: e.target.publicBaseUrl.value }).then(loadOverview), '已保存');
   });
 
   // ---------- 奖项 ----------
   async function loadPrizes() {
-    state.prizes = await api('GET', '/api/admin/prizes');
+    state.prizes = await api('GET', EP() + '/prizes');
     $('#prizeRows').innerHTML =
       state.prizes
         .map(
@@ -127,9 +280,9 @@
         <td>${p.level}</td><td>${p.quantity}</td><td>${p.won}</td>
         <td>${p.remaining ? `<span class="tag ok">${p.remaining}</span>` : '<span class="tag">已抽完</span>'}</td>
         <td class="ops">
-          <button class="btn sm" data-act="img" data-id="${p.id}">上传图片</button>
-          <button class="btn sm" data-act="edit" data-id="${p.id}">编辑</button>
-          <button class="btn sm danger" data-act="del" data-id="${p.id}">删除</button>
+          <button class="btn sm mut" data-act="img" data-id="${p.id}">上传图片</button>
+          <button class="btn sm mut" data-act="edit" data-id="${p.id}">编辑</button>
+          <button class="btn sm danger mut" data-act="del" data-id="${p.id}">删除</button>
         </td></tr>`
         )
         .join('') || '<tr><td colspan="8" class="muted">还没有奖项，点击「新增奖项」开始</td></tr>';
@@ -146,7 +299,7 @@
 
   $('#addPrize').addEventListener('click', async () => {
     const v = await dialog('新增奖项', prizeFields({ sort: (state.prizes.at(-1)?.sort ?? 0) + 1 }));
-    if (v) guard(() => api('POST', '/api/admin/prizes', v).then(loadPrizes), '已新增');
+    if (v) guard(() => api('POST', EP() + '/prizes', v).then(loadPrizes), '已新增');
   });
 
   $('#prizeRows').addEventListener('click', async (e) => {
@@ -155,9 +308,9 @@
     const p = state.prizes.find((x) => x.id === Number(btn.dataset.id));
     if (btn.dataset.act === 'edit') {
       const v = await dialog('编辑奖项', prizeFields(p));
-      if (v) guard(() => api('PUT', `/api/admin/prizes/${p.id}`, v).then(loadPrizes), '已保存');
+      if (v) guard(() => api('PUT', `${EP()}/prizes/${p.id}`, v).then(loadPrizes), '已保存');
     } else if (btn.dataset.act === 'del') {
-      if (confirm(`确定删除「${p.name}」？`)) guard(() => api('DELETE', `/api/admin/prizes/${p.id}`).then(loadPrizes), '已删除');
+      if (confirm(`确定删除「${p.name}」？`)) guard(() => api('DELETE', `${EP()}/prizes/${p.id}`).then(loadPrizes), '已删除');
     } else if (btn.dataset.act === 'img') {
       const input = document.createElement('input');
       input.type = 'file';
@@ -166,7 +319,7 @@
         const file = input.files[0];
         if (!file) return;
         if (file.size > 3 * 1024 * 1024) return toast('图片不能超过 3MB', 'error');
-        guard(() => api('POST', `/api/admin/prizes/${p.id}/image`, file).then(loadPrizes), '图片已上传');
+        guard(() => api('POST', `${EP()}/prizes/${p.id}/image`, file).then(loadPrizes), '图片已上传');
       };
       input.click();
     }
@@ -176,7 +329,7 @@
   let pTimer;
   async function loadParticipants() {
     const q = new URLSearchParams({ q: $('#pq').value, status: $('#pstatus').value, page: state.pPage, size: 50 });
-    const r = await api('GET', '/api/admin/participants?' + q);
+    const r = await api('GET', EP() + '/participants?' + q);
     $('#participantRows').innerHTML =
       r.rows
         .map(
@@ -187,8 +340,8 @@
         <td>${p.wins ? `<span class="tag warn">${p.wins} 次</span>` : ''}</td>
         <td>${p.eligible ? '' : '<span class="tag err">无资格</span>'}</td>
         <td class="ops">
-          <button class="btn sm" data-act="edit" data-id="${p.id}">编辑</button>
-          <button class="btn sm danger" data-act="del" data-id="${p.id}">删除</button>
+          <button class="btn sm mut" data-act="edit" data-id="${p.id}">编辑</button>
+          <button class="btn sm danger mut" data-act="del" data-id="${p.id}">删除</button>
         </td></tr>`
         )
         .join('') || '<tr><td colspan="9" class="muted">暂无数据</td></tr>';
@@ -217,7 +370,7 @@
       { name: 'dept', label: '部门（选填）', attrs: 'maxlength="40"' },
       { name: 'checkedIn', label: '标记为已签到（可直接参与抽奖）', type: 'checkbox', value: true },
     ]);
-    if (v) guard(() => api('POST', '/api/admin/participants', v).then(loadParticipants), '已添加');
+    if (v) guard(() => api('POST', EP() + '/participants', v).then(loadParticipants), '已添加');
   });
 
   $('#importBtn').addEventListener('click', async () => {
@@ -235,7 +388,7 @@
       '导入'
     );
     if (!v) return;
-    const r = await guard(() => api('POST', '/api/admin/participants/import', v));
+    const r = await guard(() => api('POST', EP() + '/participants/import', v));
     if (!r) return;
     const head = `成功导入 ${r.added} 人，跳过 ${r.skipped.length} 行`;
     if (r.skipped.length) alert(head + '\n\n' + r.skipped.slice(0, 30).map((s) => `第 ${s.line} 行：${s.reason}`).join('\n'));
@@ -262,23 +415,23 @@
         { name: 'checkedIn', label: '已签到', type: 'checkbox', value: p.checked_in },
         { name: 'eligible', label: '有抽奖资格（取消后不会被抽中，如评委、工作人员）', type: 'checkbox', value: p.eligible },
       ]);
-      if (v) guard(() => api('PUT', `/api/admin/participants/${p.id}`, v).then(loadParticipants), '已保存');
+      if (v) guard(() => api('PUT', `${EP()}/participants/${p.id}`, v).then(loadParticipants), '已保存');
     } else if (btn.dataset.act === 'del') {
-      if (confirm(`确定删除「${p.name}」？`)) guard(() => api('DELETE', `/api/admin/participants/${p.id}`).then(loadParticipants), '已删除');
+      if (confirm(`确定删除「${p.name}」？`)) guard(() => api('DELETE', `${EP()}/participants/${p.id}`).then(loadParticipants), '已删除');
     }
   });
 
   // ---------- 中奖 ----------
   let wTimer;
   async function loadWinners() {
-    if (!state.prizes.length) state.prizes = await api('GET', '/api/admin/prizes');
+    if (!state.prizes.length) state.prizes = await api('GET', EP() + '/prizes');
     const sel = $('#wprize');
     const cur = sel.value;
     sel.innerHTML = '<option value="">全部奖项</option>' + state.prizes.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
-    sel.value = cur;
+    sel.value = state.prizes.some((p) => String(p.id) === cur) ? cur : '';
     const q = new URLSearchParams({ prizeId: sel.value, status: $('#wstatus').value, q: $('#wq').value });
     if (!sel.value) q.delete('prizeId');
-    const [rows, draws] = await Promise.all([api('GET', '/api/admin/winners?' + q), api('GET', '/api/admin/draws')]);
+    const [rows, draws] = await Promise.all([api('GET', EP() + '/winners?' + q), api('GET', EP() + '/draws')]);
     state.wRows = rows;
     $('#winnerRows').innerHTML =
       rows
@@ -287,7 +440,7 @@
         <td>${w.id}</td><td>${w.draw_id}</td><td>${esc(w.prize_name)}</td><td>${esc(w.name)}</td><td>${esc(w.phone)}</td><td>${esc(w.dept)}</td>
         <td class="small">${esc(w.created_at)}</td>
         <td>${w.status === 'valid' ? '<span class="tag ok">有效</span>' : `<span class="tag err" title="${esc(w.revoked_at)}">作废：${esc(w.revoke_reason)}</span>`}</td>
-        <td class="ops">${w.status === 'valid' ? `<button class="btn sm danger" data-id="${w.id}">作废</button>` : ''}</td></tr>`
+        <td class="ops">${w.status === 'valid' ? `<button class="btn sm danger mut" data-id="${w.id}">作废</button>` : ''}</td></tr>`
         )
         .join('') || '<tr><td colspan="9" class="muted">暂无记录</td></tr>';
     $('#drawRows').innerHTML =
@@ -309,19 +462,21 @@
       { name: 'reason', label: '原因', value: '未到场', attrs: 'maxlength="100"' },
       { name: 'disqualify', label: '同时取消此人后续抽奖资格', type: 'checkbox', value: true },
     ], '确认作废');
-    if (v) guard(() => api('POST', `/api/admin/winners/${w.id}/revoke`, v).then(loadWinners), '已作废，名额已退回');
+    if (v) guard(() => api('POST', `${EP()}/winners/${w.id}/revoke`, v).then(loadWinners), '已作废，名额已退回');
   });
 
   // ---------- 系统 ----------
   async function loadSystem() {
     const [admins, logs] = await Promise.all([api('GET', '/api/admin/admins'), api('GET', '/api/admin/audit?limit=200')]);
     const me = $('#me').textContent;
+    const titles = new Map(state.events.map((e) => [e.id, e.title]));
     $('#adminRows').innerHTML = admins
       .map((a) => `<tr><td>${esc(a.username)}</td><td class="muted small">${esc(a.created_at)}</td>
         <td class="ops">${a.username === me ? '<span class="tag">当前</span>' : `<button class="btn sm danger" data-id="${a.id}" data-name="${esc(a.username)}">删除</button>`}</td></tr>`)
       .join('');
     $('#auditRows').innerHTML = logs
-      .map((l) => `<tr><td class="small">${esc(l.created_at)}</td><td>${esc(l.actor)}</td><td>${esc(l.action)}</td><td><div class="detail" title="${esc(l.detail)}">${esc(l.detail)}</div></td></tr>`)
+      .map((l) => `<tr><td class="small">${esc(l.created_at)}</td><td class="small">${l.event_id ? esc(titles.get(l.event_id) ?? `#${l.event_id}`) : '<span class="muted">—</span>'}</td>
+        <td>${esc(l.actor)}</td><td>${esc(l.action)}</td><td><div class="detail" title="${esc(l.detail)}">${esc(l.detail)}</div></td></tr>`)
       .join('');
   }
   $('#adminRows').addEventListener('click', (e) => {
@@ -345,9 +500,9 @@
   $('#resetBtn').addEventListener('click', async () => {
     const scope = $('#resetScope');
     const label = scope.options[scope.selectedIndex].text;
-    const confirmText = prompt(`即将执行：${label}\n此操作会先自动备份，但仍请谨慎。\n\n请输入「确认清空」继续：`);
+    const confirmText = prompt(`即将对活动「${currentEvent()?.title}」执行：${label}\n此操作会先自动备份，但仍请谨慎。\n\n请输入「确认清空」继续：`);
     if (confirmText === null) return;
-    const r = await guard(() => api('POST', '/api/admin/reset', { scope: scope.value, confirm: confirmText }));
+    const r = await guard(() => api('POST', EP() + '/reset', { scope: scope.value, confirm: confirmText }));
     if (r) toast(`已重置${r.backup ? '，备份：' + r.backup : ''}`, 'ok');
   });
 
@@ -356,23 +511,41 @@
     location.href = '/admin/login.html';
   });
 
+  // 没有活动时只能停留在「活动管理」
+  const scoped = (fn) => () => (state.eventId ? guard(fn) : go('events'));
   const loaders = {
-    overview: () => guard(loadOverview),
-    prizes: () => guard(loadPrizes),
-    participants: () => guard(loadParticipants),
-    winners: () => guard(loadWinners),
+    events: () => guard(loadEventsTab),
+    overview: scoped(loadOverview),
+    prizes: scoped(loadPrizes),
+    participants: scoped(loadParticipants),
+    winners: scoped(loadWinners),
     system: () => guard(loadSystem),
   };
 
-  // 实时刷新：签到 / 抽奖时更新当前页
+  // 实时刷新：只响应当前活动的事件（不带 eventId 的为全局事件）
   let refreshTimer;
   const refresh = () => {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => loaders[state.tab]?.(), 400);
   };
-  guard(loadOverview).then(() => {
-    subscribe({ signin: refresh, draw: refresh, revoke: refresh, participants: refresh, prizes: refresh, reset: refresh, settings: refresh });
-    const tab = location.hash.slice(1);
-    if (loaders[tab] && tab !== 'overview') go(tab);
+  const mine = (d) => d.eventId === undefined || d.eventId === state.eventId;
+  const onMine = (d) => mine(d) && refresh();
+  const onEventsChanged = () => guard(loadEvents).then(() => state.tab === 'events' && refresh());
+
+  guard(async () => {
+    $('#me').textContent = (await api('GET', '/api/auth/me')).admin.username;
+    await loadEvents();
+    go(loaders[initialTab] ? initialTab : state.eventId ? 'overview' : 'events');
+    subscribe({
+      signin: onMine,
+      draw: onMine,
+      revoke: onMine,
+      participants: onMine,
+      prizes: onMine,
+      reset: onMine,
+      settings: refresh,
+      event: (d) => mine(d) && onEventsChanged().then(refresh),
+      events: onEventsChanged,
+    }, { onResync: () => onEventsChanged().then(refresh) });
   });
 })();

@@ -10,7 +10,10 @@
     prizeIdx: 0,
     checkedIn: 0,
     myDraws: new Set(),
+    eventId: Number(new URLSearchParams(location.search).get('event')) || null,
   };
+  /** 当前活动的接口前缀 */
+  const EP = () => `/api/admin/events/${state.eventId}`;
 
   // ---------- 3D 名字球（JS 投影，标签始终正对观众） ----------
   const sphere = {
@@ -68,12 +71,13 @@
   // ---------- 数据 ----------
   async function loadAll() {
     const [o, pool, prizes] = await Promise.all([
-      api('GET', '/api/admin/overview'),
-      api('GET', '/api/admin/pool'),
-      api('GET', '/api/admin/prizes'),
+      api('GET', EP() + '/overview'),
+      api('GET', EP() + '/pool'),
+      api('GET', EP() + '/prizes'),
     ]);
-    document.title = `${o.settings.eventTitle} · 大屏`;
-    $('#title').textContent = o.settings.eventTitle;
+    document.title = `${o.event.title} · 大屏`;
+    $('#title').textContent = o.event.title;
+    if (o.event.status !== 'active') toast('该活动已归档（只读），不能抽奖', 'error');
     state.checkedIn = o.stats.checkedIn;
     $('#count').textContent = state.checkedIn;
     const qr = '/api/admin/qrcode.svg?text=' + encodeURIComponent(o.signinUrl);
@@ -111,7 +115,7 @@
     if (Number(input.value) > p.remaining) input.value = Math.max(1, p.remaining);
     $('#go').disabled = p.remaining <= 0 && state.phase === 'idle';
 
-    const won = await api('GET', `/api/admin/winners?prizeId=${p.id}&masked=1`).catch(() => []);
+    const won = await api('GET', `${EP()}/winners?prizeId=${p.id}&masked=1`).catch(() => []);
     $('#wonList').innerHTML = won.length
       ? '已中奖：' + won.slice().reverse().map((w) => `<span>${esc(w.name)}</span>`).join('')
       : '';
@@ -155,7 +159,7 @@
     const count = Math.max(1, Math.min(Number($('#drawCount').value) || 1, p.remaining));
     let result;
     try {
-      result = await api('POST', '/api/admin/draw', { prizeId: p.id, count });
+      result = await api('POST', EP() + '/draw', { prizeId: p.id, count });
       state.myDraws.add(result.drawId);
     } catch (e) {
       toast(e.message, 'error');
@@ -184,12 +188,19 @@
     state.phase = 'result';
     $('#resultTitle').textContent = `${r.prize.name} · ${r.winners.length} 位`;
     const n = r.winners.length;
-    const fs = n <= 1 ? 14 : n <= 3 ? 9 : n <= 6 ? 7 : n <= 12 ? 5 : n <= 24 ? 3.6 : 2.8;
-    $('#resultGrid').style.setProperty('--fs', fs + 'vh');
-    $('#resultGrid').innerHTML = r.winners
-      .map((w, i) => `<div class="winner" style="animation-delay:${Math.min(i * 0.12, 3)}s"><div class="n">${esc(w.name)}</div><div class="d">${esc(w.dept || w.phone)}</div></div>`)
+    const grid = $('#resultGrid');
+    let fs = n <= 1 ? 14 : n <= 3 ? 9 : n <= 6 ? 7 : n <= 12 ? 5 : n <= 24 ? 3.6 : 2.8;
+    grid.style.setProperty('--fs', fs + 'vh');
+    grid.classList.toggle('dense', n > 12);
+    grid.innerHTML = r.winners
+      .map((w, i) => `<div class="winner" style="animation-delay:${Math.min(i * 0.12, 3)}s"><div class="n">${esc(w.name)}</div><div class="p">${esc(w.phone)}</div>${w.dept ? `<div class="d">${esc(w.dept)}</div>` : ''}</div>`)
       .join('');
     $('#result').hidden = false;
+    // 大屏无人滚动：一屏放不下时逐步缩小字号，保证每位中奖者都上屏；极端人数下才退回滚动
+    while (grid.scrollHeight > grid.clientHeight && fs > 1.6) {
+      fs = Math.round(fs * 90) / 100;
+      grid.style.setProperty('--fs', fs + 'vh');
+    }
     confetti();
   }
 
@@ -229,6 +240,11 @@
   $('#result').addEventListener('click', () => state.phase === 'result' && closeResult());
 
   document.addEventListener('keydown', (e) => {
+    // 活动选择层打开时屏蔽其他按键，避免误触抽奖
+    if (!$('#picker').hidden) {
+      if (e.code === 'Escape' && state.eventId) $('#picker').hidden = true;
+      return;
+    }
     if (e.target.tagName === 'INPUT' && e.code !== 'Space' && e.code !== 'Enter') return;
     if (e.repeat) return;
     switch (e.code) {
@@ -243,6 +259,7 @@
       case 'ArrowUp': e.preventDefault(); bumpCount(1); break;
       case 'ArrowDown': e.preventDefault(); bumpCount(-1); break;
       case 'KeyQ': setMode(state.mode === 'wall' ? 'draw' : 'wall'); break;
+      case 'KeyE': if (state.phase === 'idle') openPicker().catch((err) => toast(err.message, 'error')); break;
       case 'KeyF':
         if (document.fullscreenElement) document.exitFullscreen();
         else document.documentElement.requestFullscreen?.();
@@ -319,30 +336,78 @@
   }
 
   function connect() {
-    const es = subscribe({
-      signin: onSignin,
-      draw: (d) => !state.myDraws.has(d.drawId) && reload(),
-      revoke: reload,
-      prizes: reload,
-      participants: reload,
-      settings: reload,
-      reset: reload,
-    });
-    es.onopen = () => {
-      $('#conn').textContent = '';
-      $('#conn').classList.remove('off');
-    };
-    es.onerror = () => {
-      $('#conn').textContent = '● 实时连接断开，重连中…';
-      $('#conn').classList.add('off');
-    };
+    // 只响应本活动的事件；不带 eventId 的为全局事件
+    const mine = (fn) => (d) => (d.eventId === undefined || d.eventId === state.eventId) && fn(d);
+    subscribe(
+      {
+        signin: mine(onSignin),
+        draw: mine((d) => !state.myDraws.has(d.drawId) && reload()),
+        revoke: mine(reload),
+        prizes: mine(reload),
+        participants: mine(reload),
+        settings: reload,
+        reset: mine(reload),
+        event: mine(reload),
+      },
+      {
+        onOpen: () => {
+          $('#conn').textContent = '';
+          $('#conn').classList.remove('off');
+        },
+        onError: () => {
+          $('#conn').textContent = '● 实时连接断开，重连中…';
+          $('#conn').classList.add('off');
+        },
+        // 标签页隐藏期间断开了事件流，回到前台时整体刷新一次
+        onResync: reload,
+      }
+    );
+  }
+
+  /** 列出活动供选择（进行中的优先；全部归档时列出全部）。点选后整页切换，状态干净。 */
+  async function openPicker(events) {
+    // 先显示再加载：选择层打开后其他按键被屏蔽，连按 E 不会重复请求
+    $('#pickList').innerHTML = '<p>加载中…</p>';
+    $('#pickTip').textContent = '';
+    $('#picker').hidden = false;
+    try {
+      events = events || (await api('GET', '/api/admin/events'));
+    } catch (err) {
+      $('#picker').hidden = !state.eventId;
+      throw err;
+    }
+    const active = events.filter((e) => e.status === 'active');
+    $('#pickList').innerHTML =
+      (active.length ? active : events)
+        .map(
+          (e) => `<a class="pick${e.id === state.eventId ? ' current' : ''}" href="?event=${e.id}">${esc(e.title)}<span>${
+            e.id === state.eventId ? '当前 · ' : ''
+          }已签到 ${e.checkedIn} 人</span></a>`
+        )
+        .join('') || '<p>还没有活动，请先在后台创建</p>';
+    $('#pickTip').textContent = state.eventId ? '按 Esc 返回' : '';
+    $('#picker').hidden = false;
+  }
+
+  /** 地址栏未指定活动时：只有一个进行中的活动则直接使用，否则列出供选择。 */
+  async function resolveEvent() {
+    if (state.eventId) return true;
+    const events = await api('GET', '/api/admin/events');
+    const active = events.filter((e) => e.status === 'active');
+    if (active.length === 1) {
+      state.eventId = active[0].id;
+      history.replaceState(null, '', `?event=${state.eventId}`);
+      return true;
+    }
+    await openPicker(events);
+    return false;
   }
 
   setMode('wall');
-  loadAll()
-    .then(() => {
+  resolveEvent()
+    .then((ok) => ok && loadAll().then(() => {
       sphere.frame();
       connect();
-    })
+    }))
     .catch((e) => e.status !== 401 && toast(e.message, 'error'));
 })();

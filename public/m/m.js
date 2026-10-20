@@ -2,6 +2,9 @@
   const { api, esc, $, toast } = VL;
   const show = (id) => ['loading', 'closed', 'form', 'done'].forEach((k) => ($('#' + k).hidden = k !== id));
   let pollTimer;
+  // 活动码来自二维码 /m/?e=xxx；旧二维码不带活动码时由服务端按唯一进行中的活动处理
+  const code = new URLSearchParams(location.search).get('e');
+  let q = code ? `?e=${encodeURIComponent(code)}` : '';
 
   function renderDone(me) {
     $('#doneName').textContent = me.name;
@@ -24,7 +27,7 @@
       return;
     }
     try {
-      renderDone(await api('GET', '/api/public/me'));
+      renderDone(await api('GET', '/api/public/me' + q));
     } catch {
       pollTimer = setTimeout(refresh, 30000);
     }
@@ -33,10 +36,15 @@
   async function init() {
     let ev;
     try {
-      ev = await api('GET', '/api/public/event');
+      ev = await api('GET', '/api/public/event' + q);
     } catch (e) {
       $('#loading').textContent = e.message + '，请下拉刷新';
       return;
+    }
+    // 旧链接解析出活动后固定活动码，之后新开其他活动也不影响本页轮询
+    if (!code) {
+      q = `?e=${encodeURIComponent(ev.code)}`;
+      history.replaceState(null, '', location.pathname + q);
     }
     document.title = `${ev.eventTitle} · 签到`;
     $('#title').textContent = ev.eventTitle;
@@ -44,9 +52,13 @@
     $('#modeTip').hidden = ev.signinMode !== 'whitelist';
 
     try {
-      return renderDone(await api('GET', '/api/public/me'));
+      return renderDone(await api('GET', '/api/public/me' + q));
     } catch {
       /* 未签到 */
+    }
+    if (ev.archived) {
+      $('#closedTitle').textContent = '活动已结束';
+      $('#closedTip').textContent = '感谢参与';
     }
     show(ev.signinOpen ? 'form' : 'closed');
   }
@@ -61,7 +73,7 @@
     btn.disabled = true;
     btn.textContent = '提交中…';
     try {
-      const me = await api('POST', '/api/public/signin', { name, phone, dept: $('#dept').value.trim() });
+      const me = await api('POST', '/api/public/signin' + q, { name, phone, dept: $('#dept').value.trim() });
       toast('签到成功', 'ok');
       renderDone(me);
     } catch (err) {

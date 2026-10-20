@@ -11,18 +11,36 @@
 <body>
   <aside class="side">
     <div class="brand">抽奖后台</div>
+    <div class="event-pick">
+      <label for="eventSel">当前活动</label>
+      <select class="input" id="eventSel"></select>
+    </div>
     <nav id="nav">
+      <a data-tab="events">活动管理</a>
       <a data-tab="overview" class="active">概览与签到</a>
       <a data-tab="prizes">奖项设置</a>
       <a data-tab="participants">参与者</a>
       <a data-tab="winners">中奖记录</a>
       <a data-tab="system">系统与安全</a>
     </nav>
-    <a class="btn primary screen-link" href="/screen/" target="_blank">打开抽奖大屏 ↗</a>
+    <a class="btn primary screen-link" id="screenLink" href="/screen/" target="_blank">打开抽奖大屏 ↗</a>
     <div class="me"><span id="me"></span> · <a id="logout">退出</a></div>
   </aside>
 
   <main class="main">
+    <div class="banner" id="archivedBar" hidden>
+      <span>当前活动已归档（只读）：可查看与导出，不能签到、抽奖或修改。</span>
+      <span class="spacer"></span>
+      <button class="btn sm" id="reopenBtn">重新开启</button>
+    </div>
+
+    <!-- 活动 -->
+    <section data-panel="events" hidden>
+      <h2>活动管理 <button class="btn primary sm" id="addEvent">新建活动</button></h2>
+      <p class="muted">每场活动的名单、奖项、中奖记录与设置相互独立；同一手机号可参加多场活动。活动结束后「归档」即变为只读，可随时查看、导出或重新开启。</p>
+      <table class="table"><thead><tr><th>活动</th><th>活动码</th><th>状态</th><th>签到 / 名单</th><th>中奖</th><th>创建时间</th><th></th></tr></thead><tbody id="eventRows"></tbody></table>
+    </section>
+
     <!-- 概览 -->
     <section data-panel="overview">
       <h2>概览与签到</h2>
@@ -33,7 +51,7 @@
           <div class="qr-row">
             <img id="qr" class="qr" alt="签到二维码">
             <div>
-              <p class="muted">手机与本机须在同一网络（或已配置公网地址）。</p>
+              <p class="muted">二维码地址取自当前浏览器地址栏，请用手机能访问的地址打开后台（不要用 localhost）。</p>
               <div class="url" id="signinUrl"></div>
               <p><a class="btn sm" id="openSignin" target="_blank">在新窗口打开</a> <a class="btn sm" id="downloadQr" download="signin-qrcode.svg">下载二维码</a></p>
               <details><summary class="muted">本机局域网地址</summary><ul id="lan" class="muted small"></ul></details>
@@ -41,7 +59,7 @@
           </div>
         </div>
         <div class="card">
-          <h3>活动设置</h3>
+          <h3>活动设置 <span class="muted small">（仅对当前活动生效）</span></h3>
           <form id="settings" class="form">
             <label>活动标题<input class="input" name="eventTitle" maxlength="60"></label>
             <label>签到模式
@@ -50,11 +68,15 @@
                 <option value="whitelist">名单签到：仅限预导入名单，姓名+手机号核验</option>
               </select>
             </label>
-            <label>二维码访问地址（选填）<input class="input" name="publicBaseUrl" placeholder="如 http://192.168.1.10:8201 或公网域名，留空自动识别"></label>
             <label class="check"><input type="checkbox" name="signinOpen"> 开放签到</label>
             <label class="check"><input type="checkbox" name="collectDept"> 签到时填写部门</label>
             <label class="check"><input type="checkbox" name="allowRepeatWin"> 允许同一人多次中奖（不同奖项）</label>
-            <button class="btn primary" type="submit">保存设置</button>
+            <button class="btn primary mut" type="submit">保存设置</button>
+          </form>
+          <hr>
+          <form id="globalSettings" class="form">
+            <label>二维码访问地址（全局，选填）<input class="input" name="publicBaseUrl" placeholder="留空则跟随当前浏览器地址；如需固定可填 http://公网IP:端口 或域名"></label>
+            <button class="btn" type="submit">保存</button>
           </form>
         </div>
       </div>
@@ -62,7 +84,7 @@
 
     <!-- 奖项 -->
     <section data-panel="prizes" hidden>
-      <h2>奖项设置 <button class="btn primary sm" id="addPrize">新增奖项</button></h2>
+      <h2>奖项设置 <button class="btn primary sm mut" id="addPrize">新增奖项</button></h2>
       <p class="muted">大屏按「排序」从小到大展示；通常先抽小奖、最后抽特等奖，可把特等奖排序设大。</p>
       <table class="table"><thead><tr><th>排序</th><th>图片</th><th>奖项</th><th>等级</th><th>数量</th><th>已抽</th><th>剩余</th><th></th></tr></thead><tbody id="prizeRows"></tbody></table>
     </section>
@@ -77,9 +99,9 @@
           <option value="won">已中奖</option><option value="ineligible">无抽奖资格</option>
         </select>
         <span class="spacer"></span>
-        <button class="btn sm" id="addParticipant">手动添加</button>
-        <button class="btn sm" id="importBtn">批量导入</button>
-        <a class="btn sm" href="/api/admin/participants.csv">导出 CSV</a>
+        <button class="btn sm mut" id="addParticipant">手动添加</button>
+        <button class="btn sm mut" id="importBtn">批量导入</button>
+        <a class="btn sm" id="participantsCsv">导出 CSV</a>
       </div>
       <table class="table"><thead><tr><th>#</th><th>姓名</th><th>手机号</th><th>部门</th><th>来源</th><th>签到</th><th>中奖</th><th>资格</th><th></th></tr></thead><tbody id="participantRows"></tbody></table>
       <div class="pager" id="pager"></div>
@@ -93,7 +115,7 @@
         <select class="input" id="wstatus" style="max-width:120px"><option value="valid">有效</option><option value="revoked">已作废</option><option value="all">全部</option></select>
         <input class="input" id="wq" placeholder="搜索姓名 / 手机 / 部门" style="max-width:220px">
         <span class="spacer"></span>
-        <a class="btn sm" href="/api/admin/winners.csv">导出中奖名单 CSV</a>
+        <a class="btn sm" id="winnersCsv">导出中奖名单 CSV</a>
       </div>
       <table class="table"><thead><tr><th>记录号</th><th>轮次</th><th>奖项</th><th>姓名</th><th>手机号</th><th>部门</th><th>时间</th><th>状态</th><th></th></tr></thead><tbody id="winnerRows"></tbody></table>
       <h3 style="margin-top:28px">抽奖轮次</h3>
@@ -107,13 +129,13 @@
       <div class="grid2">
         <div class="card">
           <h3>应急与备份</h3>
-          <p><a class="btn" href="/api/admin/offline.html">下载离线抽奖包</a></p>
+          <p><a class="btn" id="offlineLink">下载当前活动的离线抽奖包</a></p>
           <p class="muted small">导出当前奖池与剩余奖项为单个 HTML，断网时双击即可抽奖，结果可导出 CSV 事后补录。<b>名单变化后请重新下载。</b></p>
           <p><a class="btn" href="/api/admin/backup">下载数据库备份</a></p>
           <hr>
-          <h4>数据重置</h4>
-          <p class="muted small">重置前会自动在 data/backups 生成快照。</p>
-          <div class="toolbar">
+          <h4>数据重置（当前活动）</h4>
+          <p class="muted small">只清空当前活动的数据，其他活动不受影响；重置前会自动在 data/backups 生成快照。</p>
+          <div class="toolbar mut">
             <select class="input" id="resetScope" style="max-width:240px">
               <option value="winners">仅清空中奖记录（重新开抽）</option>
               <option value="participants">清空参与者与中奖记录</option>
@@ -141,7 +163,7 @@
       </div>
       <div class="card" style="margin-top:16px">
         <h3>操作日志</h3>
-        <table class="table compact"><thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>详情</th></tr></thead><tbody id="auditRows"></tbody></table>
+        <table class="table compact"><thead><tr><th>时间</th><th>活动</th><th>操作人</th><th>动作</th><th>详情</th></tr></thead><tbody id="auditRows"></tbody></table>
       </div>
     </section>
   </main>

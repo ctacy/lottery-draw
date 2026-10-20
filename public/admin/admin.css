@@ -8,6 +8,11 @@ a { color: var(--red); cursor: pointer; }
 .side nav a:hover { background: #2a2d33; }
 .side nav a.active { background: var(--red); color: #fff; }
 .screen-link { margin-top: auto; }
+.event-pick { padding: 0 2px 14px; }
+.event-pick label { display: block; font-size: 12px; color: #8a8f99; margin: 0 8px 6px; }
+.event-pick select { width: 100%; background: #2a2d33; color: #fff; border: 1px solid #3a3e46; }
+.banner { display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 16px; border-radius: var(--radius); background: #fff4e5; color: var(--warn); border: 1px solid #ffd8a8; }
+body.readonly .mut { display: none !important; }
 .me { font-size: 12px; padding: 12px 10px 0; }
 .me a { color: #c9cdd4; }
 .main { flex: 1; padding: 22px 28px 60px; min-width: 0; }
